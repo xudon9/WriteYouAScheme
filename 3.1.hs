@@ -6,7 +6,7 @@ import Data.Ratio
 import Data.Complex
 
 main :: IO ()
-main = putStrLn "OK..." >> getLine >>= print . eval . readExpr
+main = putStrLn "善哉。" >> getLine >>= print . eval . readExpr
 
 -- Data Type definition --
 data LispVal = Atom String
@@ -45,7 +45,7 @@ unwordsList = unwords . map showVal
 
 -- Terminals --
 symbol :: Parser Char
-symbol = oneOf "!$%&|*+-/:<=>?@^_~"
+symbol = oneOf "#!$%&|*+-/:<=>?@^_~"
 
 spaces :: Parser ()
 spaces = skipMany1 space
@@ -96,7 +96,7 @@ eval (List [Atom "quote", val]) = val
 eval (List (Atom func : args)) = apply func $ map eval args
 
 apply :: String -> [LispVal] -> LispVal
-apply func args = maybe (Bool False) ($ args) $ lookup func primitives
+apply func args = maybe (String $ func ++ "? 没听说过...") ($ args) $ lookup func primitives
 
 primitives :: [(String, [LispVal] -> LispVal)]
 primitives = [("+", numericBinop (+)),
@@ -105,10 +105,17 @@ primitives = [("+", numericBinop (+)),
   ("/", numericBinop div),
   ("mod", numericBinop mod),
   ("quotient", numericBinop quot),
-  ("remainder", numericBinop rem)]
+  ("remainder", numericBinop rem),
+  ("symbol?", unaryOp (\x -> Bool $ case x of {Atom _ -> True; _ -> False})),
+  ("string?", unaryOp (\x -> Bool $ case x of {String _ -> True; _ -> False})),
+  ("number?", unaryOp (\x -> Bool $ case x of {Number _ -> True; _ -> False})),
+  ("bool?", unaryOp (\x -> Bool $ case x of {Bool _ -> True; _ -> False})),
+  ("list?", unaryOp (\x -> Bool $ case x of {List _ -> True; DottedList _ _ -> True; _ -> False}))]
+
+unaryOp :: (LispVal -> LispVal) -> [LispVal] -> LispVal
+unaryOp f [v] = f v
 
 numericBinop :: (Integer -> Integer -> Integer) -> [LispVal] -> LispVal
---numericBinop op = Number . foldl op . map unpackNum
 numericBinop op params = Number $ foldl1 op $ map unpackNum params
 
 unpackNum :: LispVal -> Integer
