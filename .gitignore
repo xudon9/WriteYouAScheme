@@ -1,0 +1,6 @@
+*
+!.gitignore
+!*.hs
+!*.lhs
+!*.md
+!*.markdown
