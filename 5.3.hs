@@ -95,6 +95,16 @@ eval val@(String _) = return val
 eval val@(Number _) = return val
 eval val@(Bool   _) = return val
 eval (List [Atom "quote", val]) = return val
+eval (List (Atom "cond" : xs)) = evalCond xs
+    where evalCond [] = throwError . BadSpecialForm "No true expression" (List xs)
+          evalCond (List [Atom "else", val] : _) = eval val
+          evalCond (List [cond, val] : rest) = do
+              result <- eval cond
+              case result of
+                Bool False -> evalCond rest
+                Bool True  -> eval val
+                otherwise  -> throwError $ TypeMismatch "boolean" cond
+
 eval (List [Atom "if", pred, stmt1, stmt2]) = do
                      result <- eval pred
                      eval $ case result of {Bool False -> stmt2; _ -> stmt1}
