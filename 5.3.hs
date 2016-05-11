@@ -28,7 +28,7 @@ data LispVal = Atom         String
              | DottedList   [LispVal] LispVal
              | Number       Integer
              | String       String
-             | Bool         Bool
+             | Bool         Bool    deriving(Eq)
 
 -- Parse Basic Type --
 parseString :: Parser LispVal
@@ -95,16 +95,27 @@ eval val@(String _) = return val
 eval val@(Number _) = return val
 eval val@(Bool   _) = return val
 eval (List [Atom "quote", val]) = return val
-eval (List (Atom "cond" : xs)) = evalCond xs
-    where evalCond [] = throwError . BadSpecialForm "No true expression" (List xs)
-          evalCond (List [Atom "else", val] : _) = eval val
-          evalCond (List [cond, val] : rest) = do
+eval form@(List (Atom "cond" : xs)) = evalCond xs
+    where evalCond [] = throwError $ BadSpecialForm "No true expr in cond" form
+          evalCond (List (Atom "else" : vals) : _) = mapM eval vals >>= return . last
+          evalCond (List (cond : vals) : rest) = do
               result <- eval cond
               case result of
                 Bool False -> evalCond rest
-                Bool True  -> eval val
+                Bool True  -> mapM eval vals >>= return . last
                 otherwise  -> throwError $ TypeMismatch "boolean" cond
-
+eval form@(List (Atom "case" : key : xs)) = do
+    evaledKey  <- eval key
+    resultList <- evalCase evaledKey xs
+    return $ last resultList
+        where evalCase _ [] = throwError $ BadSpecialForm "No matched list in case" form
+              evalCase _ (List (Atom "else" : vals) : _) = mapM eval vals
+              evalCase k (List (List datums : vals) : rest) = do
+                  equalities <- mapM (\x -> eqv [k, x]) datums
+                  if Bool True `elem` equalities
+                     then mapM eval vals
+                     else evalCase k rest
+              evalCase _ xs = throwError $ BadSpecialForm "Bad case" $ List xs
 eval (List [Atom "if", pred, stmt1, stmt2]) = do
                      result <- eval pred
                      eval $ case result of {Bool False -> stmt2; _ -> stmt1}
