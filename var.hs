@@ -1,9 +1,9 @@
 {-# LANGUAGE ExistentialQuantification #-}
 import Data.IORef
-import Control.Monad
-import Control.Monad.Error
 import System.IO
 import System.Environment (getArgs)
+import Control.Monad
+import Control.Monad.Error
 import Text.ParserCombinators.Parsec hiding (spaces)
 
 main :: IO ()
@@ -98,28 +98,29 @@ eval :: Env -> LispVal -> IOThrowsError LispVal
 eval _ val@(String _) = return val
 eval _ val@(Number _) = return val
 eval _ val@(Bool   _) = return val
+eval env   (Atom  id) = getVar env id
 eval _ (List [Atom "quote", val]) = return val
---eval env form@(List (Atom "cond" : xs)) = evalCond xs
---    where evalCond [] = throwError $ BadSpecialForm "No true expr in cond" form
---          evalCond (List (Atom "else" : vals) : _) = mapM (eval env) vals >>= return . last
---          evalCond (List (cond : vals) : rest) = do
---              result <- eval env cond
---              case result of
---                Bool False -> evalCond rest
---                Bool True  -> mapM (eval env) vals >>= return . last
---                otherwise  -> throwError $ TypeMismatch "boolean" cond
---eval env form@(List (Atom "case" : key : xs)) = do
---    evaledKey  <- eval env key
---    resultList <- evalCase evaledKey xs
---    return $ last resultList
---        where evalCase _ [] = throwError $ BadSpecialForm "No matched list in case" form
---              evalCase _ (List (Atom "else" : vals) : _) = mapM (eval env) vals
---              evalCase k (List (List datums : vals) : rest) = do
---                  equalities <- mapM (\x -> eqv [k, x]) datums
---                  if Bool True `elem` equalities
---                     then mapM (eval env) vals
---                     else evalCase k rest
---              evalCase _ xs = throwError $ BadSpecialForm "Bad case" $ List xs
+eval env form@(List (Atom "cond" : xs)) = evalCond xs
+    where evalCond [] = throwError $ BadSpecialForm "cond里冇为真的表达式" form
+          evalCond (List (Atom "else" : vals) : _) = mapM (eval env) vals >>= return . last
+          evalCond (List (cond : vals) : rest) = do
+              result <- eval env cond
+              case result of
+                Bool False -> evalCond rest
+                Bool True  -> mapM (eval env) vals >>= return . last
+                otherwise  -> throwError $ TypeMismatch "boolean" cond
+eval env form@(List (Atom "case" : key : xs)) = do
+    evaledKey  <- eval env key
+    resultList <- evalCase evaledKey xs
+    return $ last resultList
+        where evalCase _ [] = throwError $ BadSpecialForm "No matched list in case" form
+              evalCase _ (List (Atom "else" : vals) : _) = mapM (eval env) vals
+              evalCase k (List (List datums : vals) : rest) = do
+                  equalities <- mapM (\x -> liftThrows $ eqv [k, x]) datums
+                  if Bool True `elem` equalities
+                     then mapM (eval env) vals
+                     else evalCase k rest
+              evalCase _ xs = throwError $ BadSpecialForm "Bad case" $ List xs
 eval env (List [Atom "if", pred, stmt1, stmt2]) = do
                      result <- eval env pred
                      eval env $ case result of {Bool False -> stmt2; _ -> stmt1}
@@ -273,7 +274,7 @@ instance Error LispError where
 
 type ThrowsError = Either LispError
 
-trapError :: ThrowsError String -> ThrowsError String
+trapError :: IOThrowsError String -> IOThrowsError String
 trapError action = catchError action $ return . show
 
 extractValue :: ThrowsError a -> a
