@@ -159,7 +159,7 @@ apply (PrimitiveFunc func) args = liftThrows $ func args
 apply (Func params varargs body closure) args =
     if num params /= num args && varargs == Nothing
        then throwError $ NumArgs (num params) args
-       else (liftIO $ bindVars closure $ zip params args) >>= bindVarArgs varargs >>= evalBody
+       else (liftIO . bindVars closure $ zip params args) >>= bindVarArgs varargs >>= evalBody
     where num = toInteger . length
           restArgs = drop (length params) args
           evalBody env = liftM last $ mapM (eval env) body
@@ -168,7 +168,7 @@ apply (Func params varargs body closure) args =
               Nothing -> return env
 
 primitiveBindings :: IO Env
-primitiveBindings = nullEnv >>= (flip bindVars $ map makePrimitiveFunc primitives)
+primitiveBindings = nullEnv >>= flip bindVars (map makePrimitiveFunc primitives)
     where makePrimitiveFunc (var, func) = (var, PrimitiveFunc func)
 
 primitives :: [(String, [LispVal] -> ThrowsError LispVal)]
@@ -197,7 +197,7 @@ primitives = [("+", numericBinop (+)),
   ("cons", cons),
   ("eq?", eqv),
   ("eqv?", eqv),
-  ("equal?", equal) ]
+  ("equal?", equal)]
 
 numericBinop :: (Integer -> Integer -> Integer) -> [LispVal] -> ThrowsError LispVal
 numericBinop op []            = throwError $ NumArgs 2 []
