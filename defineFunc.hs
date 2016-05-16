@@ -154,22 +154,21 @@ eval env (List (function : args)) = do
     apply func argVals
 eval env badForm = throwError $ BadSpecialForm "识唔得此形式" badForm
 
-apply :: String -> [LispVal] -> ThrowsError LispVal
+apply :: LispVal -> [LispVal] -> IOThrowsError LispVal
 apply (PrimitiveFunc func) args = liftThrows $ func args
 apply (Func params varargs body closure) args =
     if num params /= num args && varargs == Nothing
        then throwError $ NumArgs (num params) args
-       else (liftIO . bindVars closure $ zip params args) >>=
-           bindVarArgs varargs >>= evalBody
+       else (liftIO $ bindVars closure $ zip params args) >>= bindVarArgs varargs >>= evalBody
     where num = toInteger . length
           restArgs = drop (length params) args
           evalBody env = liftM last $ mapM (eval env) body
           bindVarArgs arg env = case arg of
-                                  Just argName -> liftIO $ bindVars env argName $ List restArgs
-                                  Nothing -> return env
+              Just argName -> liftIO $ bindVars env [(argName, List restArgs)]
+              Nothing -> return env
 
 primitiveBindings :: IO Env
-primitiveBindings = nullEnv >>= flip bindVars . map makePrimitiveFunc primitives
+primitiveBindings = nullEnv >>= (flip bindVars $ map makePrimitiveFunc primitives)
     where makePrimitiveFunc (var, func) = (var, PrimitiveFunc func)
 
 primitives :: [(String, [LispVal] -> ThrowsError LispVal)]
